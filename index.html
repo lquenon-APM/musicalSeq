@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Créateur de Séquences Musicales</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        @keyframes pulse-beat {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .beat-active {
+            animation: pulse-beat 0.5s ease-in-out;
+        }
+        .drag-over {
+            background-color: rgba(147, 197, 253, 0.5);
+            border: 2px dashed #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-500 via-cyan-400 to-lime-400 min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <!-- Titre -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-white drop-shadow-lg mb-2">🎵 Créateur de Séquences</h1>
+            <p class="text-lg text-white drop-shadow-md">Construis ta propre musique!</p>
+        </div>
+
+        <!-- Conteneur Principal -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 auto-rows-max md:auto-rows-none">
+            <!-- Palette d'Instruments (Gauche) -->
+            <div class="md:col-span-1 h-fit md:h-auto">
+                <div class="bg-white rounded-2xl shadow-xl p-6 sticky top-4">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">🎼 Instruments</h2>
+                    <div class="space-y-3" id="instruments-palette">
+                        <!-- Les instruments seront générés par JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Zone Principale (Grille de Séquençage) -->
+            <div class="md:col-span-3 flex flex-col gap-6">
+                <!-- Grille de Séquençage -->
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">📍 Grille de Séquençage</h2>
+                    <div class="bg-gray-50 rounded-lg p-4 mb-4 overflow-x-auto">
+                        <div class="grid grid-cols-8 gap-3 min-w-max md:min-w-full" id="sequencer-grid">
+                            <!-- Les 8 pas seront générés par JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- BPM et Info -->
+                    <div class="bg-gradient-to-r from-blue-100 to-purple-100 rounded-lg p-4 mb-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-lg font-semibold text-gray-800">⏱️ Vitesse: 120 BPM</span>
+                            <span class="text-sm text-gray-600">Pas courant: <span id="current-step" class="font-bold text-purple-600">-</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contrôles -->
+                <div class="bg-white rounded-2xl shadow-xl p-6 flex-grow flex flex-col">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">🎛️ Contrôles</h2>
+                    <div class="flex flex-wrap gap-4 justify-center flex-grow items-center">
+                        <button id="play-btn" class="bg-gradient-to-r from-green-400 to-green-500 hover:from-green-500 hover:to-green-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg transform hover:scale-105 transition-transform text-lg">
+                            ▶️ Jouer
+                        </button>
+                        <button id="stop-btn" class="bg-gradient-to-r from-red-400 to-red-500 hover:from-red-500 hover:to-red-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg transform hover:scale-105 transition-transform text-lg">
+                            ⏹️ Arrêter
+                        </button>
+                        <button id="clear-btn" class="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg transform hover:scale-105 transition-transform text-lg">
+                            🔄 Effacer Tout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // STATE ET CONFIGURATION
+        // ============================================
+        const state = {
+            sequence: [null, null, null, null, null, null, null, null], // 8 pas
+            isPlaying: false,
+            currentStep: -1,
+            audioInitialized: false,
+            sequenceInstance: null
+        };
+
+        const instruments = [
+            { id: 'kick', name: 'Kick', emoji: '🥁' },
+            { id: 'snare', name: 'Snare', emoji: '🎸' },
+            { id: 'hihat', name: 'Hi-Hat', emoji: '🎹' },
+            { id: 'synth', name: 'Synth', emoji: '🎺' }
+        ];
+
+        // ============================================
+        // SYNTHÉTISEURS TONE.JS
+        // ============================================
+        const synths = {
+            kick: null,
+            snare: null,
+            hihat: null,
+            synth: null
+        };
+
+        function initializeSynths() {
+            // Kick (🥁 - Son grave et puissant type 808 Kick)
+            synths.kick = new Tone.MembraneSynth({
+                pitchDecay: 0.12,      // Durée du pitch decay pour l'effet "punchy"
+                octaves: 4,
+                oscillator: { type: 'sine' },
+                envelope: {
+                    attack: 0.001,     // Très rapide
+                    decay: 0.35,       // Décay long et expressif
+                    sustain: 0,
+                    release: 0.15
+                }
+            }).toDestination();
+
+            // Snare (🎸 - Son de caisse claire authentique)
+            synths.snare = new Tone.Synth({
+                oscillator: { type: 'square' },  // Square pour un bruit riche
+                envelope: {
+                    attack: 0.001,     // Très rapide
+                    decay: 0.12,       // Décay court et punchy
+                    sustain: 0,
+                    release: 0.05
+                }
+            });
+
+            const snareFilter = new Tone.Filter({
+                frequency: 5000,
+                type: 'highpass'
+            }).toDestination();
+
+            synths.snare.connect(snareFilter);
+
+            // Hi-Hat (🎹 - Son aigu et sec type charleston)
+            synths.hihat = new Tone.MetalSynth({
+                frequency: 250,        // Fréquence plus haute
+                envelope: {
+                    attack: 0.001,     // Très rapide
+                    decay: 0.08,       // Très court et sec
+                    release: 0
+                },
+                harmonicity: 15,       // Plus d'harmoniques pour un son plus riche
+                resonance: 5000,       // Plus haute résonance
+                volume: -20
+            }).toDestination();
+
+            // Synth (🎺 - Son synthétique mélodique plus brillant)
+            synths.synth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: 'square' },  // Square pour un son plus riche
+                envelope: {
+                    attack: 0.01,      // Attaque très rapide
+                    decay: 0.15,       // Décay court
+                    sustain: 0,
+                    release: 0.08      // Release court
+                }
+            }).toDestination();
+
+            // Configuration du transport
+            Tone.Transport.bpm.value = 120;
+            Tone.Transport.timeSignature = 4;
+        }
+
+        // ============================================
+        // FONCTIONS AUDIO
+        // ============================================
+        async function initializeAudio() {
+            if (!state.audioInitialized) {
+                await Tone.start();
+                state.audioInitialized = true;
+                initializeSynths();
+            }
+        }
+
+        function playInstrument(instrumentId) {
+            if (!state.audioInitialized) return;
+
+            const now = Tone.now();
+            const duration = '16n'; // Durée de la note
+
+            switch (instrumentId) {
+                case 'kick':
+                    // Son grave et profond (A0 pour un vrai kick lourd)
+                    synths.kick.triggerAttackRelease('A0', duration, now);
+                    break;
+                case 'snare':
+                    // Son de caisse claire avec oscillateur carré filtré en highpass
+                    synths.snare.triggerAttackRelease('C3', duration, now);
+                    break;
+                case 'hihat':
+                    // Son aigu et sec
+                    synths.hihat.triggerAttackRelease(duration, now);
+                    break;
+                case 'synth':
+                    // Note mélodique plus haute et plus brillante
+                    synths.synth.triggerAttackRelease('D4', duration, now);
+                    break;
+            }
+        }
+
+        function startSequence() {
+            if (!state.audioInitialized) return;
+
+            if (state.sequenceInstance) {
+                state.sequenceInstance.dispose();
+            }
+
+            let stepIndex = 0;
+
+            // Utiliser Loop à la place de Sequence pour plus de contrôle
+            state.sequenceInstance = new Tone.Loop((time) => {
+                state.currentStep = stepIndex % 8;
+                updateStepDisplay();
+
+                // Jouer l'instrument du pas courant
+                const instrumentId = state.sequence[stepIndex % 8];
+                if (instrumentId) {
+                    playInstrument(instrumentId);
+                }
+
+                stepIndex++;
+            }, '8n'); // 8 notes par mesure (8 pas)
+
+            state.sequenceInstance.start(0);
+            Tone.Transport.start();
+            state.isPlaying = true;
+            updatePlayButton();
+        }
+
+        function stopSequence() {
+            if (state.sequenceInstance) {
+                state.sequenceInstance.dispose();
+                state.sequenceInstance = null;
+            }
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
+            state.isPlaying = false;
+            state.currentStep = -1;
+            updateStepDisplay();
+            updatePlayButton();
+        }
+
+        function clearSequence() {
+            state.sequence = [null, null, null, null, null, null, null, null];
+            stopSequence();
+            renderGrid();
+        }
+
+        // ============================================
+        // INTERFACE ET RENDU
+        // ============================================
+        function renderInstrumentsPalette() {
+            const palette = document.getElementById('instruments-palette');
+            palette.innerHTML = '';
+
+            const instrumentColors = {
+                kick: 'from-red-300 to-orange-300 border-red-400',
+                snare: 'from-blue-300 to-cyan-300 border-blue-400',
+                hihat: 'from-yellow-300 to-amber-300 border-yellow-400',
+                synth: 'from-green-300 to-emerald-300 border-green-400'
+            };
+
+            instruments.forEach(instrument => {
+                const div = document.createElement('div');
+                const colors = instrumentColors[instrument.id];
+                div.className = `bg-gradient-to-r ${colors} p-4 rounded-lg cursor-move hover:shadow-lg transition-shadow border-2 touch-none`;
+                div.draggable = true;
+                div.dataset.instrumentId = instrument.id;
+                div.innerHTML = `
+                    <div class="text-4xl mb-2">${instrument.emoji}</div>
+                    <div class="font-semibold text-gray-800 text-sm">${instrument.name}</div>
+                `;
+
+                div.addEventListener('dragstart', handleDragStart);
+                div.addEventListener('touchstart', handleTouchStart);
+                palette.appendChild(div);
+            });
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('sequencer-grid');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < 8; i++) {
+                const cell = document.createElement('div');
+                const instrumentId = state.sequence[i];
+                const instrument = instrumentId ? instruments.find(inst => inst.id === instrumentId) : null;
+
+                cell.className = `
+                    aspect-square p-2 rounded-lg border-2 cursor-pointer transition-all
+                    ${state.currentStep === i ? 'border-green-500 bg-green-100 ring-4 ring-green-400' : 'border-gray-300 bg-white'}
+                    ${instrumentId ? 'bg-gradient-to-br shadow-md' : 'hover:bg-gray-50'}
+                `;
+
+                if (instrumentId) {
+                    cell.className += ` from-${getColorForInstrument(instrumentId)}-200 to-${getColorForInstrument(instrumentId)}-300`;
+                    cell.innerHTML = `
+                        <div class="text-3xl text-center mb-1">${instrument.emoji}</div>
+                        <div class="text-xs font-bold text-gray-700 text-center">${i + 1}</div>
+                    `;
+                } else {
+                    cell.innerHTML = `<div class="text-lg font-bold text-gray-300 text-center mt-3">${i + 1}</div>`;
+                }
+
+                cell.draggable = false;
+                cell.dataset.stepIndex = i;
+
+                // Event listeners pour drag and drop
+                cell.addEventListener('dragover', handleDragOver);
+                cell.addEventListener('drop', handleDrop);
+                cell.addEventListener('dragleave', handleDragLeave);
+                cell.addEventListener('click', () => removeInstrument(i));
+                cell.addEventListener('touchend', handleTouchEnd(i));
+
+                grid.appendChild(cell);
+            }
+        }
+
+        function getColorForInstrument(instrumentId) {
+            const colors = {
+                kick: 'orange',
+                snare: 'cyan',
+                hihat: 'amber',
+                synth: 'emerald'
+            };
+            return colors[instrumentId] || 'gray';
+        }
+
+        function updateStepDisplay() {
+            document.getElementById('current-step').textContent = state.currentStep >= 0 ? state.currentStep + 1 : '-';
+            renderGrid();
+        }
+
+        function updatePlayButton() {
+            const playBtn = document.getElementById('play-btn');
+            const stopBtn = document.getElementById('stop-btn');
+            if (state.isPlaying) {
+                playBtn.disabled = true;
+                playBtn.className = playBtn.className.replace('hover:from-green-500', '').replace('hover:to-green-600', '');
+                playBtn.style.opacity = '0.5';
+                stopBtn.disabled = false;
+                stopBtn.style.opacity = '1';
+            } else {
+                playBtn.disabled = false;
+                playBtn.style.opacity = '1';
+                stopBtn.disabled = true;
+                stopBtn.className = stopBtn.className.replace('hover:from-red-500', '').replace('hover:to-red-600', '');
+                stopBtn.style.opacity = '0.5';
+            }
+        }
+
+        // ============================================
+        // DRAG AND DROP
+        // ============================================
+        let draggedInstrumentId = null;
+
+        function handleDragStart(e) {
+            draggedInstrumentId = e.target.closest('div').dataset.instrumentId;
+            e.dataTransfer.effectAllowed = 'copy';
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+
+            const stepIndex = parseInt(e.currentTarget.dataset.stepIndex);
+            if (draggedInstrumentId) {
+                state.sequence[stepIndex] = draggedInstrumentId;
+                renderGrid();
+
+                // Jouer l'instrument
+                playInstrument(draggedInstrumentId);
+            }
+        }
+
+        // Support du touch
+        let touchInstrumentId = null;
+
+        function handleTouchStart(e) {
+            touchInstrumentId = e.currentTarget.dataset.instrumentId;
+        }
+
+        function handleTouchEnd(stepIndex) {
+            return function(e) {
+                if (touchInstrumentId) {
+                    if (state.sequence[stepIndex] === touchInstrumentId) {
+                        // Tap pour supprimer
+                        removeInstrument(stepIndex);
+                    } else {
+                        // Déplacer l'instrument
+                        state.sequence[stepIndex] = touchInstrumentId;
+                        renderGrid();
+                        playInstrument(touchInstrumentId);
+                    }
+                    touchInstrumentId = null;
+                }
+            };
+        }
+
+        function removeInstrument(stepIndex) {
+            state.sequence[stepIndex] = null;
+            renderGrid();
+        }
+
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
+        document.getElementById('play-btn').addEventListener('click', async (e) => {
+            await initializeAudio();
+            startSequence();
+        });
+
+        document.getElementById('stop-btn').addEventListener('click', stopSequence);
+
+        document.getElementById('clear-btn').addEventListener('click', clearSequence);
+
+        // ============================================
+        // INITIALISATION
+        // ============================================
+        window.addEventListener('DOMContentLoaded', () => {
+            renderInstrumentsPalette();
+            renderGrid();
+            updatePlayButton();
+        });
+    </script>
+</body>
+</html>
